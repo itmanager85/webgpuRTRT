@@ -14,4 +14,4 @@ In the near future I plan to port to WGSL GPGPU LBVH Building & Traverse from my
 
 Это позволяет мне сделать это бесплатным для всех!
 
-В ближайшее время планирую портировать на WGSL GPGPU LBVH Building & Traverse с моего движка opencl RTRT (ранее не публиковался)
+В ближайшее время планирую портировать на WGSL GPGPU LBVH Building & Traverse с моего opencl RTRT движка (ранее не публиковался)
