@@ -11,21 +11,9 @@
     <title>Babylon.js sample code</title>
 
     <!-- Babylon.js -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.6.2/dat.gui.min.js"></script>
-    <script src="https://assets.babylonjs.com/generated/Assets.js"></script>
-    <script src="https://cdn.babylonjs.com/ammo.js"></script>
-    <script src="https://cdn.babylonjs.com/havok/HavokPhysics_umd.js"></script>
-    <script src="https://cdn.babylonjs.com/cannon.js"></script>
-    <script src="https://cdn.babylonjs.com/Oimo.js"></script>
-    <script src="https://cdn.babylonjs.com/earcut.min.js"></script>
     <script src="https://cdn.babylonjs.com/babylon.js"></script>
-    <script src="https://cdn.babylonjs.com/materialsLibrary/babylonjs.materials.min.js"></script>
-    <script src="https://cdn.babylonjs.com/proceduralTexturesLibrary/babylonjs.proceduralTextures.min.js"></script>
-    <script src="https://cdn.babylonjs.com/postProcessesLibrary/babylonjs.postProcess.min.js"></script>
     <script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.js"></script>
-    <script src="https://cdn.babylonjs.com/serializers/babylonjs.serializers.min.js"></script>
-    <script src="https://cdn.babylonjs.com/gui/babylon.gui.min.js"></script>
-    <script src="https://cdn.babylonjs.com/inspector/babylon.inspector.bundle.js"></script>
+
 
   <script>
     // Get the canvas DOM element
@@ -246,21 +234,10 @@
             if (!this.supportCS) {
                 return true;
             }
-
-            //if (!this.compute_to_render_target_ok_flag) {
-            //    console.log("RaytraceEngine::update_screen_size() :: !this.compute_to_render_target_ok_flag");
-            //    return false;
-            //}
  
             if (newWidth != this.settings.width || newHeight != this.settings.height) {
 
-                //this.render_target_ok_flag = false;
                 ComputeHelper.onResize_uniformBuffer_flag_need_update = true;
-
-                //console.log("newWidth != this.settings.width || newHeight != this.settings.height");
-                //console.log("[screen size] { width = " + width + ", height = " + height + " }");
-                //console.log("[new size] { newWidth = " + newWidth + ", newHeight = " + newHeight + " }");
-                //console.log("[this.settings size] { width = " + this.settings.width + ", height = " + this.settings.height + " }");
 
                 width = newWidth;
                 height = newHeight;
@@ -274,16 +251,6 @@
                  //this._trailMap.resize({ width: newWidth, height: newHeight });
                 this._displayTexture.resize({ width: newWidth, height: newHeight });
 
-                //const size = this._displayTexture.getSize();
-
-                //if (width != size.width || height != size.height) {
-                //    console.log("RaytraceEngine::update_screen_size() ::  (width != size.width || height != size.height)");
-                //    console.log("[screen size] { width = " + width + ", height = " + height + " }");
-                //    console.log("[this._displayTexture size] { width = " + size.width + ", height = " + size.height + " }");
-                //}
-
-                //this.render_target_ok_flag = true;
-
                 return true;
             }
 
@@ -295,40 +262,9 @@
                 return;
             }
 
-            //if (windowIsBeingResized) {
-            //   console.log("windowIsBeingResized");
-            //    return;
-            //}
-
-            //if (!this.render_target_ok_flag) {
-            //
-            //    console.log("RaytraceEngine::update() :: !this.render_target_ok_flag");
-            //    return;
-            //}
-
-            //this.compute_to_render_target_ok_flag = false;
-
-            //const size = this._displayTexture.getSize();
-            
-            //if ( width != size.width || height != size.height ) {
-            //    console.log("RaytraceEngine::update() :: update()");
-            //    console.log("[screen size] { width = " + width + ", height = " + height + " }");
-            //    console.log("[render target size] { width = " + size.width + ", height = " + size.height + " }");
-            //
-            //    return;
-            //}
-
-             //this._runRaytrace();
-             //ComputeHelper.CopyBufferToTexture(this._trailMap, this._displayTexture);
-
-            //ComputeHelper.ClearTexture(this._displayTexture, new BABYLON.Color4(0, 0, 0, 0), ComputeHelper.onResize_uniformBuffer_flag_need_update);
-              //ComputeHelper.ClearTexture(this._displayTexture, new BABYLON.Color4(0.1, 0.7, 0.2, 0.7)); // green
-
             if (true == this._trianglesLoaded) {
                 ComputeHelper.rtrt_to_texture(this._displayTexture, this._triangleBuffer, new BABYLON.Color4(0.1, 0.7, 0.2, 0.7), ComputeHelper.onResize_uniformBuffer_flag_need_update);
             }
-
-            //this.compute_to_render_target_ok_flag = true;
 
             ComputeHelper.onResize_uniformBuffer_flag_need_update = false;
         }
@@ -347,28 +283,13 @@
 
             const triangleBuffer = new BABYLON.StorageBuffer(this._engine, triangle_array.length * 4);
 
-            //console.log("triangle_array[3] = " + triangle_array[3]);
-            //console.log("triangle_array[4] = " + triangle_array[4]);
-            //console.log("triangle_array[5] = " + triangle_array[5]);
-
             triangleBuffer.update(triangle_array);
 
             this._triangleBuffer = triangleBuffer;
 
-            //this._compute.setStorageBuffer("triangles", triangleBuffer);
-
             this._trianglesLoaded = true;
 
             ComputeHelper.onResize_uniformBuffer_flag_need_update = true;
-
-            //let tribuf = triangleBuffer.getBuffer();
-
-            //let tribuf = new Float32Array(triangle_array.length);
-            //triangleBuffer.read(0, triangle_array.length * 4, tribuf).then(() => {
-            //    console.log("tribuf[3] = " + tribuf[3]);
-            //    console.log("tribuf[4] = " + tribuf[4]);
-            //    console.log("tribuf[5] = " + tribuf[5]);
-            //});
         }
 
         _init() {
@@ -376,27 +297,11 @@
             //this._trailMap = new BABYLON.StorageBuffer(this._engine, this.settings.width * this.settings.height * 4 * 4);
             this._displayTexture = ComputeHelper.CreateRenderTexture("rttDisplay", this._displayTexture, this.settings.width, this.settings.height, this.filterMode, this.textureType, this._scene);
 
-            //const engine = this._engine;
-
-            //this.render_target_ok_flag = true;
-            //this.compute_to_render_target_ok_flag = true;
             ComputeHelper.onResize_uniformBuffer_flag_need_update = true;
-
-            //this._compute = new BABYLON.ComputeShader("raytrace", engine, { computeSource: computeSimulation }, { bindingsMapping: {
-            //    "params": { group: 0, binding: 0 },
-            //    "TrailMap": { group: 0, binding: 1 },
-            //}});
         }
 
         _runRaytrace() {
             const deltaTime = this._engine.getDeltaTime() / 1000;
-
-            // simulation
-            //this._computeParams.updateFloat("raytraceDepth", deltaTime);
-            //this._computeParams.update();
-
-            //ComputeHelper.Dispatch(this._compute, this.settings.numAgents, 1, 1);
-            //ComputeHelper.CopyTextureToBuffer(this._diffusedTrailMap, this._trailMap);
         }
     }
 
@@ -429,14 +334,6 @@
 
                 temp : vec2<f32>, // align
             }; // align 16 bytes ?
-
-            //struct Triangles {
-            //    triangles : array<Triangle>,
-            //}; 
-            
-            //struct FloatArray {
-            //    elements : array<f32>,
-            //}; 
 
             // Ray structure
             struct Ray
@@ -548,10 +445,7 @@
                 let camForward      : vec3<f32> = vec3<f32>( params.uCameraMatrix[2][0], params.uCameraMatrix[2][1], params.uCameraMatrix[2][2]);
                 let cameraPosition  : vec3<f32> = vec3<f32>( params.uCameraMatrix[3][0], params.uCameraMatrix[3][1], params.uCameraMatrix[3][2]);
                 
-                //let x : f32 = f32(global_id.x);
                 let fragCoord : vec2<f32> = vec2<f32>(global_id.xy) + 0.5;
-                //let fragCoord : vec2<f32> = vec2<f32>(f32(global_id.x), f32(global_id.y));
-                //let fragCoord : vec2<f32> = vec2<f32>(f32(global_id.x) + 0.5, f32(global_id.y) + 0.5);
                 
                 let uResolution : vec2<f32> = vec2<f32>(f32(params.width), f32(params.height));
 
@@ -560,17 +454,7 @@
 
                 let rayDir : vec3<f32> = normalize( pixelPos.x * camRight * params.uULen + pixelPos.y * camUp * params.uVLen + camForward );
 
-                //textureStore(tbuf, vec2<i32>(global_id.xy), params.color);
-
-                //let val : f32 = TrailMap.elements[0];
-
-                //let val : f32 = triangles[0].v0.x; //triangles.triangles[0].v0.x;
-                 //var newColor: vec4<f32> = vec4<f32>(0.2, 0.4, 0.5, 0.5);
-                 //newColor += params.color;
                 var newColor: vec4<f32> = params.color;
-                 //newColor.x += val;
-
-                //var newColor: vec4<f32> = vec4<f32>(rayDir, 0.5);
 
                 var r : Ray;
                 RayInit(&r, cameraPosition, rayDir);
@@ -612,29 +496,6 @@
 
                     for(var i = 0; i < number_of_triangles; i++) {
 
-                        //let v0 : vec3<f32> = vec3<f32> (0,0,0); 
-                        //let v1 : vec3<f32> = vec3<f32> (0,50,0); 
-                        //let v2 : vec3<f32> = vec3<f32> (50,0,0); 
-
-                        //let v0 : vec3<f32> = vec3<f32>(triangles.elements[0], triangles.elements[1], triangles.elements[2]); 
-                        //let v1 : vec3<f32> = vec3<f32>(triangles.elements[3], triangles.elements[4], triangles.elements[5]); 
-                        //let v2 : vec3<f32> = vec3<f32>(triangles.elements[6], triangles.elements[7], triangles.elements[8]); 
-
-                        //let v0 : vec3<f32> = vec3<f32>(triangles[0], triangles[1], triangles[2]); 
-                        //let v1 : vec3<f32> = vec3<f32>(triangles[3], triangles[4], triangles[5]); 
-                        //let v2 : vec3<f32> = vec3<f32>(triangles[6], triangles[7], triangles[8]); 
-
-                        //let v0 : vec3<f32> = triangles.triangles[i].v0;
-                        //let v1 : vec3<f32> = triangles.triangles[i].v1;
-                        //let v2 : vec3<f32> = triangles.triangles[i].v2;
-
-                        //let tri : Triangle = triangles[i];
-                        //let tri : Triangle = triangles.triangles[i];
-
-                        //let v0 : vec3<f32> = tri.v0;
-                        //let v1 : vec3<f32> = tri.v1;
-                        //let v2 : vec3<f32> = tri.v2;
-
                         let v0 : vec3<f32> = triangles[i].v0.xyz;
                         let v1 : vec3<f32> = vec3<f32>(triangles[i].v0.w, triangles[i].v1.x, triangles[i].v1.y); 
                         let v2 : vec3<f32> = vec3<f32>(triangles[i].v1.z, triangles[i].v1.w, triangles[i].v2.x); 
@@ -664,12 +525,6 @@
                         ray_depth = ray_depth_count + 1;
                         break;
                     }
-
-                    //if( hit_r.hit_index >= 0 ) {
-                    //    //newColor = vec4<f32>(0.2, 0.4, 0.5, 0.5);
-                    //    hit_r.color = vec3<f32>(0.2, 0.4, 0.5);
-                    //    ray_depth = ray_depth_count + 1;
-                    //}
 
                     if(hit_r.hit_index >= 0) {
                     
@@ -844,26 +699,12 @@
                 ComputeHelper.rtrtTextureCS.setUniformBuffer("params", uBuffer0); // cs1
 
                 ComputeHelper.rtrtTextureParams = uBuffer0;
-
-                //ComputeHelper.onResize_uniformBuffer_flag_need_update = false;
             }
 
             ComputeHelper.rtrtTextureCS.setStorageTexture("tbuf", source);
 
-            //if (!triangleBuffer) {
-            //    console.log("rtrt_to_texture():: (!triangleBuffer)");
-            //    return;
-            //}
-
             ComputeHelper.rtrtTextureCS.setStorageBuffer("triangles", triangleBuffer);
 
-            // test
-            //const agentBuffer = new BABYLON.StorageBuffer(engine, 1024*4);
-            //const agents = new Float32Array(1024);
-            //agentBuffer.update(agents);
-            //ComputeHelper.rtrtTextureCS.setStorageBuffer("TrailMap", agentBuffer);
-            
-            //const { width, height } = source.getSize();
             const size = source.getSize();
 
             ComputeHelper.rtrtTextureParams.updateDirectColor4("color", color);
@@ -882,25 +723,6 @@
 
         static ClearTexture(source, color, onResize_flag) {
 
-            //if (!source){
-            //    console.log("ComputeHelper::ClearTexture() :: (!source)");
-            //    return;
-            //}
-
-            //if (!source.getScene().getEngine()){
-            //    console.log("ComputeHelper::ClearTexture() :: (!source.getScene().getEngine())");
-            //    return;
-            //}
-
-            //if (!ComputeHelper.clearTextureCS) {
-                //console.log("ComputeHelper::ClearTexture() :: (!ComputeHelper.clearTextureCS)");
-                 //return;
-            //}
-
-            //if (!ComputeHelper.clearTextureParams) {
-                //console.log("ComputeHelper::ClearTexture() :: (!ComputeHelper.clearTextureParams)");
-                 //return;
-            //}
             const engine = source.getScene().getEngine();
 
             if (!ComputeHelper.clearTextureCS) {
@@ -916,7 +738,7 @@
                 onResize_flag = true;
             }
 
-            if (onResize_flag) { // ComputeHelper.onResize_uniformBuffer_flag_need_update
+            if (onResize_flag) { 
 
                 const uBuffer0 = new BABYLON.UniformBuffer(engine);
 
@@ -928,8 +750,6 @@
 
                 
                 ComputeHelper.clearTextureParams = uBuffer0;
-
-                //ComputeHelper.onResize_uniformBuffer_flag_need_update = false;
             }
 
             ComputeHelper.clearTextureCS.setStorageTexture("tbuf", source);
@@ -941,38 +761,6 @@
             ComputeHelper.clearTextureParams.updateInt("width", size.width);
             ComputeHelper.clearTextureParams.updateInt("height", size.height);
             ComputeHelper.clearTextureParams.update();
-
-            //if ( width != size.width || height != size.height ) {
-            //    console.log("ComputeHelper::ClearTexture() :: ( width != size.width || height != size.height )");
-            //    console.log("[screen size] { width = " + width + ", height = " + height + " }");
-            //    console.log("[render target size] { width = " + size.width + ", height = " + size.height + " }");
-            //
-            //    return;
-            //}
-
-            //const engine_temp = source.getScene().getEngine();
-
-            //const engine_temp_width = engine_temp.getRenderWidth();
-            //const engine_temp_height = engine_temp.getRenderHeight();
-
-            //if ( width != engine_temp_width || height != engine_temp_height ) {
-            //    console.log("ComputeHelper::ClearTexture() :: ( width != engine_temp.width || height != engine_temp.height )");
-            //    console.log("[screen size] { width = " + width + ", height = " + height + " }");
-            //    console.log("[engine_temp size] { width = " + engine_temp_width + ", height = " + engine_temp_height + " }");
-            //
-            //    return;
-            //}
-
-            //const engine_width = engine.getRenderWidth();
-            //const engine_height = engine.getRenderHeight();
-
-            //if ( width != engine_width || height != engine_height ) {
-            //    console.log("ComputeHelper::ClearTexture() :: ( width != engine_width || height != engine_height )");
-            //    console.log("[screen size] { width = " + width + ", height = " + height + " }");
-            //    console.log("[engine size] { width = " + engine_width + ", height = " + engine_height + " }");
-            //
-            //    return;
-            //}
 
             ComputeHelper.Dispatch(ComputeHelper.clearTextureCS, size.width, size.height, 1);
         }
@@ -1028,30 +816,16 @@
         let newWidth = engine.getRenderWidth();
         let newHeight = engine.getRenderHeight();
 
-        //rayTracingRenderTarget.resize({ width: newWidth, height: newHeight });
-        //screenCopyRenderTarget.resize({ width: newWidth, height: newHeight });
-
-        //if (!raytraceEngine) {
-        //    console.log("handleWindowResize():: false == raytraceEngine");
-        //    return;            
-        //}
-
         if (!raytraceEngine.update_screen_size(newWidth, newHeight)) {
             console.log("handleWindowResize():: !raytraceEngine.update_screen_size()");
             return;
         }
-
-        //width = newWidth;
-        //height = newHeight;
-
-        //uVLen = Math.tan(camera.fov * 0.5);
-        //uULen = uVLen * (width / height);
     }
 
     let modelNameAndExtension = "cube.obj";
     let containerMeshes = [];
     let rayTracedMesh;
-    //var rayTracingScene2_Loaded = null; //
+
     let total_number_of_triangles = 0;
     let triangle_array = [];
 
@@ -1117,8 +891,6 @@
 
             total_number_of_triangles = rayTracedMesh.getTotalVertices() / 3;
 
-            //rayTracingScene.add(scene.meshes[0]);
-            //rayTracingScene.add(containerMeshes);
 
             Prepare_Model_For_RayTracing();
 
@@ -1225,14 +997,7 @@
         triangle_array[7] = 0; // g or y 
         triangle_array[8] = 0; // b or z
         */
-
-        //console.log("triangle_array[3] = " + triangle_array[3]);
-        //console.log("triangle_array[4] = " + triangle_array[4]);
-        //console.log("triangle_array[5] = " + triangle_array[5]);
     }
-
-    // kickstart the loading process
-    //loadModel();
 
   </script>
 </body>
