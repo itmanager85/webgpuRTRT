@@ -1,0 +1,1238 @@
+<body>
+  <canvas id="renderCanvas"></canvas>
+  <style>
+    body, #renderCanvas {
+      margin: 0;
+      width: 100%;
+      height: 100vh;
+    }
+  </style>
+
+    <title>Babylon.js sample code</title>
+
+    <!-- Babylon.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.6.2/dat.gui.min.js"></script>
+    <script src="https://assets.babylonjs.com/generated/Assets.js"></script>
+    <script src="https://cdn.babylonjs.com/ammo.js"></script>
+    <script src="https://cdn.babylonjs.com/havok/HavokPhysics_umd.js"></script>
+    <script src="https://cdn.babylonjs.com/cannon.js"></script>
+    <script src="https://cdn.babylonjs.com/Oimo.js"></script>
+    <script src="https://cdn.babylonjs.com/earcut.min.js"></script>
+    <script src="https://cdn.babylonjs.com/babylon.js"></script>
+    <script src="https://cdn.babylonjs.com/materialsLibrary/babylonjs.materials.min.js"></script>
+    <script src="https://cdn.babylonjs.com/proceduralTexturesLibrary/babylonjs.proceduralTextures.min.js"></script>
+    <script src="https://cdn.babylonjs.com/postProcessesLibrary/babylonjs.postProcess.min.js"></script>
+    <script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.js"></script>
+    <script src="https://cdn.babylonjs.com/serializers/babylonjs.serializers.min.js"></script>
+    <script src="https://cdn.babylonjs.com/gui/babylon.gui.min.js"></script>
+    <script src="https://cdn.babylonjs.com/inspector/babylon.inspector.bundle.js"></script>
+
+  <script>
+    // Get the canvas DOM element
+    let canvas = document.getElementById('renderCanvas');
+    // Load the 3D engine
+    //var engine = new BABYLON.Engine(canvas, true, {preserveDrawingBuffer: true, stencil: true});
+
+    let engine = null;
+    let rayTracingScene = null; //var scene = null;
+    let sceneToRender = null;
+
+    let raytraceEngine = null;
+
+    let isPaused = true;
+    let sceneIsDynamic = false;
+
+    let width = 1280;
+    let height = 720;
+
+    let rayDepth = 3; //4; //3;
+
+    let camera;
+    let oldCameraMatrix, newCameraMatrix;
+
+    oldCameraMatrix = new BABYLON.Matrix();
+    newCameraMatrix = new BABYLON.Matrix();
+
+    let windowIsBeingResized = false;
+    
+    // common required uniforms
+    let uULen = 1.0; // rendering pixel horizontal scale, related to camera's FOV and aspect ratio
+    let uVLen = 1.0; // rendering pixel vertical scale, related to camera's FOV
+    let uCameraIsMoving = false; // lets the path tracer know if the camera is being moved
+
+    //let triangles = [];
+
+    var createDefaultEngine = async function() { 
+        let engine = new BABYLON.WebGPUEngine(canvas);
+        await engine.initAsync();
+
+        //let engine = new BABYLON.Engine(canvas, true);        
+
+        return engine;
+    };
+
+    var update_camera_matrix = function(camera, oldCameraMatrix, newCameraMatrix){
+
+        let uCameraIsMoving = false;
+
+        newCameraMatrix.copyFrom(camera.getWorldMatrix());
+
+        let nm = newCameraMatrix.m;
+        let om = oldCameraMatrix.m;
+        if (nm[0] != om[0] || nm[1] != om[1] || nm[2] != om[2] || nm[3] != om[3] ||
+            nm[4] != om[4] || nm[5] != om[5] || nm[6] != om[6] || nm[7] != om[7] ||
+            nm[8] != om[8] || nm[9] != om[9] || nm[10] != om[10] || nm[11] != om[11] ||
+            nm[12] != om[12] || nm[13] != om[13] || nm[14] != om[14] || nm[15] != om[15])
+        {
+            uCameraIsMoving = true;
+        }
+
+        // save camera state for next frame's comparison
+        oldCameraMatrix.copyFrom(newCameraMatrix);
+
+        // get current camera orientation basis vectors
+        //cameraDirectionVector.set(nm[8], nm[9], nm[10]);
+        //cameraDirectionVector.normalize();
+        //cameraUpVector.set(nm[4], nm[5], nm[6]);
+        //cameraUpVector.normalize();
+        //cameraRightVector.set(nm[0], nm[1], nm[2]);
+        //cameraRightVector.normalize();
+
+        return uCameraIsMoving;
+    }
+
+    var startRenderLoop = function (engine, canvas) {
+        engine.runRenderLoop(function () {
+            if (sceneToRender && sceneToRender.activeCamera) {
+
+                // first, reset cameraIsMoving flag
+	            uCameraIsMoving = false;
+
+                if (windowIsBeingResized) {
+                    uCameraIsMoving = true;
+                    windowIsBeingResized = false;
+                }
+
+                if (update_camera_matrix(camera, oldCameraMatrix, newCameraMatrix)){
+                    uCameraIsMoving = true;
+                }
+
+                sceneToRender.render();
+            }
+        });
+    }
+
+    var createCamera = function (scene) {
+
+        width = engine.getRenderWidth();
+        height = engine.getRenderHeight();
+
+        // This creates and positions a free camera (non-mesh)
+        //let camera = new BABYLON.FreeCamera("camera1", new BABYLON.Vector3(0, 5, -10), scene);
+        // This targets the camera to scene origin
+        //camera.setTarget(BABYLON.Vector3.Zero());
+
+        let camera = new BABYLON.ArcRotateCamera("Camera", -Math.PI / 2, Math.PI / 2.5, 150, new BABYLON.Vector3(0, 0, 0), scene);
+
+        // This attaches the camera to the canvas
+        camera.attachControl(canvas, true);
+
+        //use middle button for panning 
+        camera.attachControl(true,false,1);
+        //only use right button
+        camera.inputs.attached.pointers.buttons = [2];
+
+        camera.angularSensibilityX = 250;
+        camera.angularSensibilityY = 250;
+        camera.wheelPrecision = 1.0; //0.12; //Mouse wheel speed
+
+        uVLen = Math.tan(camera.fov * 0.5);
+        uULen = uVLen * (engine.getRenderWidth() / engine.getRenderHeight());
+
+        return camera;
+    };
+
+    var createScene = function () {
+        // This creates a basic Babylon Scene object (non-mesh)
+        var scene = new BABYLON.Scene(engine);
+
+        camera = createCamera(scene);
+
+        // kickstart the loading process
+        //loadModel_ImportMesh(scene);
+        loadModel();
+
+        const layer = new BABYLON.Layer("layer", "", scene, true);
+
+        raytraceEngine = new RaytraceEngine(layer, scene);
+
+        RaytraceEngineDemo.demo1(raytraceEngine);
+
+        raytraceEngine.start();
+
+        //makeGUI(engine, scene);
+
+        scene.onBeforeRenderObservable.add(() => {
+            raytraceEngine.update();
+        });
+
+        return scene;
+    };
+
+    //const SpawnMode = { "Random": 0, "Point": 1, "InwardCircle": 2, "RandomCircle": 3 };
+
+    class RaytraceEngineDemo {
+
+        static demo1(raytraceEngine) {
+            //raytraceEngine.demo = 1;
+
+            const settings = raytraceEngine.settings;
+
+            //settings.speciesSettings = [20, 2, 30, 35, 1,];
+
+            settings.raytraceDepth = 4;
+           }
+    }
+
+    class RaytraceSettings {
+        // Simulation Settings
+        width = 1280; /* int */
+        height = 720; /* int */
+        raytraceDepth = 4; 
+    }
+
+    class RaytraceEngine {
+
+        //render_target_ok_flag = false;
+        //compute_to_render_target_ok_flag = false;
+
+        // Display Settings
+        filterMode = BABYLON.Constants.TEXTURE_BILINEAR_SAMPLINGMODE;
+        textureType = BABYLON.Constants.TEXTURETYPE_HALF_FLOAT;
+
+        settings = new RaytraceSettings();
+
+        _layer;
+        _scene;
+        _engine;
+        //_trailMap;
+        _displayTexture;
+        _triangleBuffer;
+
+        _trianglesLoaded = false;
+
+        constructor(layer, scene) {
+            this._layer = layer;
+            this._scene = scene;
+            this._engine = engine;
+
+            this.settings.width = this._engine.getRenderWidth();
+            this.settings.height = this._engine.getRenderHeight();
+
+            this.supportCS = this._engine.getCaps().supportComputeShaders;
+        }
+
+        start() {
+            if (!this.supportCS) {
+                return;
+            }
+            this._init();
+            this._layer.texture = this._displayTexture;
+            this._startTime = new Date().getTime();
+        }
+
+        update_screen_size(newWidth, newHeight) {
+
+            if (!this.supportCS) {
+                return true;
+            }
+
+            //if (!this.compute_to_render_target_ok_flag) {
+            //    console.log("RaytraceEngine::update_screen_size() :: !this.compute_to_render_target_ok_flag");
+            //    return false;
+            //}
+ 
+            if (newWidth != this.settings.width || newHeight != this.settings.height) {
+
+                //this.render_target_ok_flag = false;
+                ComputeHelper.onResize_uniformBuffer_flag_need_update = true;
+
+                //console.log("newWidth != this.settings.width || newHeight != this.settings.height");
+                //console.log("[screen size] { width = " + width + ", height = " + height + " }");
+                //console.log("[new size] { newWidth = " + newWidth + ", newHeight = " + newHeight + " }");
+                //console.log("[this.settings size] { width = " + this.settings.width + ", height = " + this.settings.height + " }");
+
+                width = newWidth;
+                height = newHeight;
+
+                uVLen = Math.tan(camera.fov * 0.5);
+                uULen = uVLen * (width / height);
+
+                this.settings.width = newWidth;
+                this.settings.height = newHeight;
+
+                 //this._trailMap.resize({ width: newWidth, height: newHeight });
+                this._displayTexture.resize({ width: newWidth, height: newHeight });
+
+                //const size = this._displayTexture.getSize();
+
+                //if (width != size.width || height != size.height) {
+                //    console.log("RaytraceEngine::update_screen_size() ::  (width != size.width || height != size.height)");
+                //    console.log("[screen size] { width = " + width + ", height = " + height + " }");
+                //    console.log("[this._displayTexture size] { width = " + size.width + ", height = " + size.height + " }");
+                //}
+
+                //this.render_target_ok_flag = true;
+
+                return true;
+            }
+
+            return false;
+        }
+
+        update() {
+            if (!this.supportCS) {
+                return;
+            }
+
+            //if (windowIsBeingResized) {
+            //   console.log("windowIsBeingResized");
+            //    return;
+            //}
+
+            //if (!this.render_target_ok_flag) {
+            //
+            //    console.log("RaytraceEngine::update() :: !this.render_target_ok_flag");
+            //    return;
+            //}
+
+            //this.compute_to_render_target_ok_flag = false;
+
+            //const size = this._displayTexture.getSize();
+            
+            //if ( width != size.width || height != size.height ) {
+            //    console.log("RaytraceEngine::update() :: update()");
+            //    console.log("[screen size] { width = " + width + ", height = " + height + " }");
+            //    console.log("[render target size] { width = " + size.width + ", height = " + size.height + " }");
+            //
+            //    return;
+            //}
+
+             //this._runRaytrace();
+             //ComputeHelper.CopyBufferToTexture(this._trailMap, this._displayTexture);
+
+            //ComputeHelper.ClearTexture(this._displayTexture, new BABYLON.Color4(0, 0, 0, 0), ComputeHelper.onResize_uniformBuffer_flag_need_update);
+              //ComputeHelper.ClearTexture(this._displayTexture, new BABYLON.Color4(0.1, 0.7, 0.2, 0.7)); // green
+
+            if (true == this._trianglesLoaded) {
+                ComputeHelper.rtrt_to_texture(this._displayTexture, this._triangleBuffer, new BABYLON.Color4(0.1, 0.7, 0.2, 0.7), ComputeHelper.onResize_uniformBuffer_flag_need_update);
+            }
+
+            //this.compute_to_render_target_ok_flag = true;
+
+            ComputeHelper.onResize_uniformBuffer_flag_need_update = false;
+        }
+
+        dispose() {
+            this._trailMap.dispose();
+            this._displayTexture.dispose();
+            this._triangleBuffer.dispose();
+            //this._computeParams.dispose();
+        }
+
+        _load() {
+            this._trianglesLoaded = false;
+
+            console.log ("triangle_array.length = " + triangle_array.length);
+
+            const triangleBuffer = new BABYLON.StorageBuffer(this._engine, triangle_array.length * 4);
+
+            //console.log("triangle_array[3] = " + triangle_array[3]);
+            //console.log("triangle_array[4] = " + triangle_array[4]);
+            //console.log("triangle_array[5] = " + triangle_array[5]);
+
+            triangleBuffer.update(triangle_array);
+
+            this._triangleBuffer = triangleBuffer;
+
+            //this._compute.setStorageBuffer("triangles", triangleBuffer);
+
+            this._trianglesLoaded = true;
+
+            ComputeHelper.onResize_uniformBuffer_flag_need_update = true;
+
+            //let tribuf = triangleBuffer.getBuffer();
+
+            //let tribuf = new Float32Array(triangle_array.length);
+            //triangleBuffer.read(0, triangle_array.length * 4, tribuf).then(() => {
+            //    console.log("tribuf[3] = " + tribuf[3]);
+            //    console.log("tribuf[4] = " + tribuf[4]);
+            //    console.log("tribuf[5] = " + tribuf[5]);
+            //});
+        }
+
+        _init() {
+            // Create render textures
+            //this._trailMap = new BABYLON.StorageBuffer(this._engine, this.settings.width * this.settings.height * 4 * 4);
+            this._displayTexture = ComputeHelper.CreateRenderTexture("rttDisplay", this._displayTexture, this.settings.width, this.settings.height, this.filterMode, this.textureType, this._scene);
+
+            //const engine = this._engine;
+
+            //this.render_target_ok_flag = true;
+            //this.compute_to_render_target_ok_flag = true;
+            ComputeHelper.onResize_uniformBuffer_flag_need_update = true;
+
+            //this._compute = new BABYLON.ComputeShader("raytrace", engine, { computeSource: computeSimulation }, { bindingsMapping: {
+            //    "params": { group: 0, binding: 0 },
+            //    "TrailMap": { group: 0, binding: 1 },
+            //}});
+        }
+
+        _runRaytrace() {
+            const deltaTime = this._engine.getDeltaTime() / 1000;
+
+            // simulation
+            //this._computeParams.updateFloat("raytraceDepth", deltaTime);
+            //this._computeParams.update();
+
+            //ComputeHelper.Dispatch(this._compute, this.settings.numAgents, 1, 1);
+            //ComputeHelper.CopyTextureToBuffer(this._diffusedTrailMap, this._trailMap);
+        }
+    }
+
+    class ComputeHelper {
+
+        static rtrtTextureComputeShader = `
+
+            struct Params {
+                color : vec4<f32>,
+                width : u32,
+                height : u32,
+                uULen : f32,
+                uVLen : f32,
+                rayDepth : u32,
+                uCameraMatrix : mat4x4<f32>,
+            };
+
+            struct Triangle {
+                v0 : vec4<f32>,
+                v1 : vec4<f32>, 
+                v2 : vec4<f32>,
+
+                n0 : vec4<f32>, 
+                n1 : vec4<f32>, 
+                n2 : vec4<f32>,
+
+                uv0 : vec2<f32>, 
+                uv1 : vec2<f32>, 
+                uv2 : vec2<f32>,
+
+                temp : vec2<f32>, // align
+            }; // align 16 bytes ?
+
+            //struct Triangles {
+            //    triangles : array<Triangle>,
+            //}; 
+            
+            //struct FloatArray {
+            //    elements : array<f32>,
+            //}; 
+
+            // Ray structure
+            struct Ray
+            {	
+                ori : vec3<f32>,
+                dir : vec3<f32>,
+                inv_dir : vec3<f32>,
+            };
+
+            fn RayInit(r : ptr<function, Ray>, o : vec3<f32>, d : vec3<f32>)
+            {
+                (*r).ori = o;
+                let dir : vec3<f32> = normalize(d);
+                (*r).dir = dir;
+                (*r).inv_dir = vec3<f32>(1.0/dir.x,1.0/dir.y,1.0/dir.z);
+            }; 
+
+            struct HitRecord
+            {
+                t : f32,
+
+                color : vec3<f32>,
+                normal : vec3<f32>,
+
+                hit_index : i32,
+            };
+
+            fn HitRecordInit( ht : ptr<function, HitRecord> ) {
+
+                const UINT_MAX = 4294967295;
+
+                (*ht).t = UINT_MAX;
+                (*ht).hit_index = -1; 
+                (*ht).color = vec3<f32>(0,0,0);
+            }; 
+
+            fn HitRecord_resetT( ht : ptr<function, HitRecord> ) {
+
+                const UINT_MAX = 4294967295;
+
+                (*ht).t = UINT_MAX;
+                (*ht).hit_index = -1; 
+            }; 
+
+            // the classic ray triangle intersection: http://www.cs.virginia.edu/~gfx/Courses/2003/ImageSynthesis/papers/Acceleration/Fast%20MinimumStorage%20RayTriangle%20Intersection.pdf
+            fn RayTriangleIntersection(r : Ray, v0 : vec3<f32>, edge1 : vec3<f32>, edge2 : vec3<f32>) -> f32
+            {  
+
+                let tvec : vec3<f32> = r.ori - v0;  
+                let pvec : vec3<f32> = cross(r.dir, edge2);  
+                let det : f32  = 1.0 / dot(edge1, pvec);  
+
+                let u : f32 = dot(tvec, pvec) * det;  
+
+                if (u < 0.0 || u > 1.0) {
+                    return -1.0;  
+                } 
+
+                let qvec : vec3<f32> = cross(tvec, edge1);  
+                
+                let v : f32 = dot(r.dir, qvec) * det;  
+
+                if (v < 0.0 || (u + v) > 1.0) {
+                    return -1.0;
+                } 
+
+                return dot(edge2, qvec) * det;  
+            }  
+
+            fn RaySphereIntersection(ray : Ray, sphere_center : vec3<f32>, sphere_radius : f32, t : ptr<function, f32>) -> bool
+            {
+                let sr : vec3<f32> = ray.ori - sphere_center;
+                let b : f32 =  dot(sr,ray.dir);
+                let c : f32 = dot(sr,sr) - (sphere_radius*sphere_radius);
+                let d : f32 = b*b - c;
+
+                if (d > 0) 
+                {
+                    let e : f32 = sqrt(d);
+                    let t0 : f32 = -b-e;
+
+                    if(t0 < 0) {
+                        *t = -b+e;
+                    } else {
+                        *t = min(-b-e,-b+e);
+                    }
+                    return true;
+                }
+                return false;
+            }
+
+            @group(0) @binding(0) var tbuf : texture_storage_2d<rgba16float, write>;
+            @group(0) @binding(1) var<uniform> params : Params;
+            @group(0) @binding(2) var<storage, read> triangles : array<Triangle>; //Triangles; //array<f32>; //FloatArray; //Triangles; //
+
+            //@group(0) @binding(2) var<storage, read> TrailMap : FloatArray;
+
+            @compute @workgroup_size(8, 8, 1)
+            fn main(
+                @builtin(global_invocation_id) global_id : vec3<u32>
+            ) {
+                if (global_id.x >= params.width || global_id.y >= params.height) { // if (global_id.x >= 100 || global_id.y >= 100) { // 
+                    return;
+                }
+
+                
+                let camRight        : vec3<f32> = vec3<f32>( params.uCameraMatrix[0][0], params.uCameraMatrix[0][1], params.uCameraMatrix[0][2]);
+                let camUp           : vec3<f32> = vec3<f32>( params.uCameraMatrix[1][0], params.uCameraMatrix[1][1], params.uCameraMatrix[1][2]);
+                let camForward      : vec3<f32> = vec3<f32>( params.uCameraMatrix[2][0], params.uCameraMatrix[2][1], params.uCameraMatrix[2][2]);
+                let cameraPosition  : vec3<f32> = vec3<f32>( params.uCameraMatrix[3][0], params.uCameraMatrix[3][1], params.uCameraMatrix[3][2]);
+                
+                //let x : f32 = f32(global_id.x);
+                let fragCoord : vec2<f32> = vec2<f32>(global_id.xy) + 0.5;
+                //let fragCoord : vec2<f32> = vec2<f32>(f32(global_id.x), f32(global_id.y));
+                //let fragCoord : vec2<f32> = vec2<f32>(f32(global_id.x) + 0.5, f32(global_id.y) + 0.5);
+                
+                let uResolution : vec2<f32> = vec2<f32>(f32(params.width), f32(params.height));
+
+                // we must map pixelPos into the range -1.0 to +1.0
+                let pixelPos : vec2<f32> = (fragCoord / uResolution) * 2.0 - 1.0;
+
+                let rayDir : vec3<f32> = normalize( pixelPos.x * camRight * params.uULen + pixelPos.y * camUp * params.uVLen + camForward );
+
+                //textureStore(tbuf, vec2<i32>(global_id.xy), params.color);
+
+                //let val : f32 = TrailMap.elements[0];
+
+                //let val : f32 = triangles[0].v0.x; //triangles.triangles[0].v0.x;
+                 //var newColor: vec4<f32> = vec4<f32>(0.2, 0.4, 0.5, 0.5);
+                 //newColor += params.color;
+                var newColor: vec4<f32> = params.color;
+                 //newColor.x += val;
+
+                //var newColor: vec4<f32> = vec4<f32>(rayDir, 0.5);
+
+                var r : Ray;
+                RayInit(&r, cameraPosition, rayDir);
+
+                var hit_r : HitRecord;
+	            HitRecordInit ( &hit_r );
+
+                const number_of_triangles = 156; //1; //
+
+                var continue_path : bool = true;
+
+                let light_pos : vec3<f32> = vec3<f32>( -23, 25, 3 ) ; 
+                let light_color : vec3<f32> = vec3<f32>( 1, 1, 1 );
+                let light_sphere_radius : f32 = 2.0;
+
+                var sphere_t : f32;
+	            var sphere_hit : bool = RaySphereIntersection(r, light_pos, light_sphere_radius, &sphere_t);
+
+                if(sphere_hit && sphere_t > 0.001) {
+
+                    if(!continue_path) {
+                        hit_r.color = light_color;
+                    }
+                    sphere_hit = true;
+                }
+
+                const EPSILON = 0.001;
+
+                let shadow_coef : f32 = 1.0f;
+
+                // {xf, yf}
+                let pf : vec2<f32> = vec2<f32>(fragCoord.x / f32(params.width), fragCoord.y / f32(params.height));
+
+                //var ray_depth : u32 = 0;
+
+                //params.rayDepth // 3 // 1
+                var ray_depth : u32 = 0;
+                for (var ray_depth_count : u32 = 0; ray_depth_count < params.rayDepth; ray_depth_count++) {
+
+                    for(var i = 0; i < number_of_triangles; i++) {
+
+                        //let v0 : vec3<f32> = vec3<f32> (0,0,0); 
+                        //let v1 : vec3<f32> = vec3<f32> (0,50,0); 
+                        //let v2 : vec3<f32> = vec3<f32> (50,0,0); 
+
+                        //let v0 : vec3<f32> = vec3<f32>(triangles.elements[0], triangles.elements[1], triangles.elements[2]); 
+                        //let v1 : vec3<f32> = vec3<f32>(triangles.elements[3], triangles.elements[4], triangles.elements[5]); 
+                        //let v2 : vec3<f32> = vec3<f32>(triangles.elements[6], triangles.elements[7], triangles.elements[8]); 
+
+                        //let v0 : vec3<f32> = vec3<f32>(triangles[0], triangles[1], triangles[2]); 
+                        //let v1 : vec3<f32> = vec3<f32>(triangles[3], triangles[4], triangles[5]); 
+                        //let v2 : vec3<f32> = vec3<f32>(triangles[6], triangles[7], triangles[8]); 
+
+                        //let v0 : vec3<f32> = triangles.triangles[i].v0;
+                        //let v1 : vec3<f32> = triangles.triangles[i].v1;
+                        //let v2 : vec3<f32> = triangles.triangles[i].v2;
+
+                        //let tri : Triangle = triangles[i];
+                        //let tri : Triangle = triangles.triangles[i];
+
+                        //let v0 : vec3<f32> = tri.v0;
+                        //let v1 : vec3<f32> = tri.v1;
+                        //let v2 : vec3<f32> = tri.v2;
+
+                        let v0 : vec3<f32> = triangles[i].v0.xyz;
+                        let v1 : vec3<f32> = vec3<f32>(triangles[i].v0.w, triangles[i].v1.x, triangles[i].v1.y); 
+                        let v2 : vec3<f32> = vec3<f32>(triangles[i].v1.z, triangles[i].v1.w, triangles[i].v2.x); 
+
+                        //let v0 : vec3<f32> = triangles[i].v0;
+                        //let v1 : vec3<f32> = triangles[i].v1;
+                        //let v2 : vec3<f32> = triangles[i].v2;
+
+                        let e1 : vec3<f32> = v1 - v0;
+                        let e2 : vec3<f32> = v2 - v0;
+
+                        let t = RayTriangleIntersection(r, v0, e1, e2);
+
+                        if(t < hit_r.t && t > EPSILON)
+                        {
+                            hit_r.t = t; 
+                            hit_r.hit_index = i;
+                        }
+                    }
+
+                    sphere_hit = RaySphereIntersection(r, light_pos, light_sphere_radius, &sphere_t);
+
+                    if(sphere_hit && sphere_t > EPSILON && sphere_t < hit_r.t)
+                    {
+                        hit_r.color += light_color * shadow_coef;
+                        continue_path = false;
+                        ray_depth = ray_depth_count + 1;
+                        break;
+                    }
+
+                    //if( hit_r.hit_index >= 0 ) {
+                    //    //newColor = vec4<f32>(0.2, 0.4, 0.5, 0.5);
+                    //    hit_r.color = vec3<f32>(0.2, 0.4, 0.5);
+                    //    ray_depth = ray_depth_count + 1;
+                    //}
+
+                    if(hit_r.hit_index >= 0) {
+                    
+                        ray_depth = ray_depth_count + 1;
+
+                        let hit_i = hit_r.hit_index;
+
+                        let v0 : vec3<f32> = triangles[ hit_i ].v0.xyz;
+                        let v1 : vec3<f32> = vec3<f32>( triangles[ hit_i ].v0.w, triangles[ hit_i ].v1.x, triangles[ hit_i ].v1.y); 
+                        let v2 : vec3<f32> = vec3<f32>( triangles[ hit_i ].v1.z, triangles[ hit_i ].v1.w, triangles[ hit_i ].v2.x); 
+
+                        let e1 : vec3<f32> = v1 - v0;
+                        let e2 : vec3<f32> = v2 - v0;
+                        
+                        // create the normal
+                        hit_r.normal = normalize( cross(e1, e2) );
+
+                        // calculate simple diffuse light
+                        let hitpoint : vec3<f32> = r.ori + r.dir *hit_r.t;
+                        var L : vec3<f32> = light_pos - hitpoint;
+                        let dist_to_light : f32 = length(L);
+                        
+                        L = normalize(L);
+                        var diffuse_light : f32 = max( dot(L, hit_r.normal), 0.0);
+                        diffuse_light = min( diffuse_light, 1.0);
+
+                        //calculate simple specular light
+                        let H : vec3<f32> = normalize(L + (-r.dir));
+                        var specular_light : f32 = pow(max(dot(H, hit_r.normal),0.0), 25.0);
+
+                        diffuse_light  *=  16.0 / dist_to_light;
+                        specular_light *=  16.0 / dist_to_light;
+
+                        diffuse_light = clamp(diffuse_light, 0.0, 1.0);
+                        specular_light = clamp(specular_light, 0.0, 1.0);
+
+                        let rez_color : vec3<f32> = light_color * diffuse_light +  (vec3<f32>(1.0,1.0,1.0)) * specular_light*0.2 + (vec3<f32>(0.2,0.2,0.2));
+                        
+                        /*
+                        //if ( ray_depth < 2 ) 
+                        {
+                            var ray_shadow : Ray;
+
+                            // create a shadow ray
+                            RayInit ( &ray_shadow, hitpoint + L * EPSILON, L ); //Ray shadow_ray(hitpoint, L);
+                            HitRecord_resetT( &hit_r ); //hit_r.resetT();
+                            hit_r.hit_index = traverse_bvh ( &ray_shadow, &hit_r.t, mesh_vertices , mesh_indices, bvh_nodes, bvh_tris_indices, false, number_of_triangles, num_bvh_tris, num_bvh_nodes, temp ); // tHit
+                            if ( hit_r.hit_index >= 0 && hit_r.t > 0.025) {
+                                //hit_r.color *= 0.25f;
+                                //rez_color *= 0.25f;
+                                shadow_coef *= 0.25f;
+                                //break;
+                            }
+                        }
+                        */
+
+                        hit_r.color += rez_color * shadow_coef; //+ (float3)(0.2,0.2,0.2); // (float3)(0.1,0.1,0.1); // 
+                            
+                        ///*		
+                        { // reflect
+                            HitRecord_resetT( &hit_r ); //hit_r.resetT();
+                            let refl : vec3<f32> = reflect(r.dir, hit_r.normal);
+                            RayInit ( &r, hitpoint + refl * EPSILON, refl ); //r = Ray(hitpoint, reflect(r.dir,hit_r.normal));
+                        }
+                        //*/
+                    }
+                    else
+                    {
+                        continue_path = false;
+                        hit_r.color += vec3<f32>(0.5, 0.5, pf.y + 0.3) * shadow_coef;
+                        ray_depth = ray_depth_count + 1;
+                    }
+                }
+
+                if(ray_depth >= 1 || sphere_hit) {
+                    ray_depth = max(ray_depth, 1);
+                    hit_r.color /= f32(ray_depth); // normalize the colors
+                } else {
+                    hit_r.color = vec3<f32>(0.5, 0.5, pf.y + 0.3); // yf
+                }
+
+                newColor = vec4<f32>(hit_r.color.x, hit_r.color.y, hit_r.color.z, 1.0);
+
+                textureStore(tbuf, vec2<i32>(global_id.xy), newColor);
+            }
+        `;
+
+        static clearTextureComputeShader = `
+            @group(0) @binding(0) var tbuf : texture_storage_2d<rgba16float, write>;
+
+            struct Params {
+                color : vec4<f32>,
+                width : u32,
+                height : u32,
+            };
+            @group(0) @binding(1) var<uniform> params : Params;
+
+            @compute @workgroup_size(8, 8, 1)
+            fn main(
+                //@builtin(local_invocation_id) local_id : vec3<u32>,
+                @builtin(global_invocation_id) global_id : vec3<u32>
+            ) {
+                if (global_id.x >= params.width || global_id.y >= params.height) {
+                    return;
+                }
+                //textureStore(tbuf, vec2<i32>(global_id.xy), params.color);
+
+                let pixel : vec4<f32> = vec4<f32>(
+                    f32(global_id.x) / f32(params.width), //f32(local_id.x) / 8, // 0.3, //
+                    0.4, //f32(global_id.y) / f32(params.height), //f32(local_id.y) / 8, //0.4, //
+                    f32(global_id.y) / f32(params.height), //0.2, //f32(global_id.x) / f32(params.width), //f32(local_id.x) / 8, //
+                    0.5 // f32(global_id.y) / f32(params.height) //
+                );
+
+                textureStore(tbuf, vec2<i32>(global_id.xy), pixel);
+            }
+        `;
+
+        static GetThreadGroupSizes(source) {
+            const res = /workgroup_size\s*?\(\s*?(\d+)\s*?,\s*?(\d+)\s*?,\s*?(\d+)/g.exec(source);
+            return res ? new BABYLON.Vector3(res[1] | 0, res[2] | 0, res[3] | 0) : new BABYLON.Vector3(1, 1, 1);
+        }
+
+        static CreateRenderTexture(name, texture, nwidth, nheight, filterMode, textureType, scene) {
+            const { width, height } = texture ? texture.getSize() : { width: 0, height: 0 };
+            const type = texture ? texture.getInternalTexture().type : -1;
+            if (!texture || width !== nwidth || height !== nheight || textureType !== type) {
+                texture = new BABYLON.RenderTargetTexture(name, { width: nwidth, height: nheight }, scene, false, undefined, textureType, false, filterMode, false, false, false,
+                    BABYLON.Constants.TEXTUREFORMAT_RGBA, false, undefined, BABYLON.Constants.TEXTURE_CREATIONFLAG_STORAGE);
+            }
+            texture.wrapU = BABYLON.Constants.TEXTURE_CLAMP_ADDRESSMODE;
+            texture.wrapV = BABYLON.Constants.TEXTURE_CLAMP_ADDRESSMODE;
+            texture.updateSamplingMode(filterMode);
+
+            return texture;
+        }
+
+        static rtrt_to_texture(source, triangleBuffer, color, onResize_flag) {
+
+            const engine = source.getScene().getEngine();
+
+            if (!ComputeHelper.rtrtTextureCS) {
+                const cs1 = new BABYLON.ComputeShader("rtrtTextureCompute", engine, { computeSource: ComputeHelper.rtrtTextureComputeShader }, { bindingsMapping:
+                    {
+                        "tbuf": { group: 0, binding: 0 },
+                        "params": { group: 0, binding: 1 },
+                        "triangles": { group: 0, binding: 2 },
+
+                        //"TrailMap": { group: 0, binding: 2 },
+                    }
+                });
+
+                ComputeHelper.rtrtTextureCS = cs1;
+
+                onResize_flag = true;
+            }
+
+            if (onResize_flag) { // ComputeHelper.onResize_uniformBuffer_flag_need_update
+
+                const uBuffer0 = new BABYLON.UniformBuffer(engine);
+
+                uBuffer0.addUniform("color", 4);
+                uBuffer0.addUniform("width", 1);
+                uBuffer0.addUniform("height", 1);
+
+                uBuffer0.addUniform("uULen", 1);
+                uBuffer0.addUniform("uVLen", 1);
+                uBuffer0.addUniform("rayDepth", 1);
+
+                uBuffer0.addUniform("uCameraMatrix", 4*4);
+                
+                ComputeHelper.rtrtTextureCS.setUniformBuffer("params", uBuffer0); // cs1
+
+                ComputeHelper.rtrtTextureParams = uBuffer0;
+
+                //ComputeHelper.onResize_uniformBuffer_flag_need_update = false;
+            }
+
+            ComputeHelper.rtrtTextureCS.setStorageTexture("tbuf", source);
+
+            //if (!triangleBuffer) {
+            //    console.log("rtrt_to_texture():: (!triangleBuffer)");
+            //    return;
+            //}
+
+            ComputeHelper.rtrtTextureCS.setStorageBuffer("triangles", triangleBuffer);
+
+            // test
+            //const agentBuffer = new BABYLON.StorageBuffer(engine, 1024*4);
+            //const agents = new Float32Array(1024);
+            //agentBuffer.update(agents);
+            //ComputeHelper.rtrtTextureCS.setStorageBuffer("TrailMap", agentBuffer);
+            
+            //const { width, height } = source.getSize();
+            const size = source.getSize();
+
+            ComputeHelper.rtrtTextureParams.updateDirectColor4("color", color);
+            ComputeHelper.rtrtTextureParams.updateInt("width", size.width);
+            ComputeHelper.rtrtTextureParams.updateInt("height", size.height);
+            ComputeHelper.rtrtTextureParams.updateFloat("uULen", uULen);
+            ComputeHelper.rtrtTextureParams.updateFloat("uVLen", uVLen);
+            ComputeHelper.rtrtTextureParams.updateUInt("rayDepth", rayDepth);
+            ComputeHelper.rtrtTextureParams.updateMatrix("uCameraMatrix", camera.getWorldMatrix());
+            ComputeHelper.rtrtTextureParams.update();
+
+            ComputeHelper.Dispatch(ComputeHelper.rtrtTextureCS, size.width, size.height, 1);
+
+            //agentBuffer.dispose();
+        }
+
+        static ClearTexture(source, color, onResize_flag) {
+
+            //if (!source){
+            //    console.log("ComputeHelper::ClearTexture() :: (!source)");
+            //    return;
+            //}
+
+            //if (!source.getScene().getEngine()){
+            //    console.log("ComputeHelper::ClearTexture() :: (!source.getScene().getEngine())");
+            //    return;
+            //}
+
+            //if (!ComputeHelper.clearTextureCS) {
+                //console.log("ComputeHelper::ClearTexture() :: (!ComputeHelper.clearTextureCS)");
+                 //return;
+            //}
+
+            //if (!ComputeHelper.clearTextureParams) {
+                //console.log("ComputeHelper::ClearTexture() :: (!ComputeHelper.clearTextureParams)");
+                 //return;
+            //}
+            const engine = source.getScene().getEngine();
+
+            if (!ComputeHelper.clearTextureCS) {
+                const cs1 = new BABYLON.ComputeShader("clearTextureCompute", engine, { computeSource: ComputeHelper.clearTextureComputeShader }, { bindingsMapping:
+                    {
+                        "tbuf": { group: 0, binding: 0 },
+                        "params": { group: 0, binding: 1 },
+                    }
+                });
+
+                ComputeHelper.clearTextureCS = cs1;
+
+                onResize_flag = true;
+            }
+
+            if (onResize_flag) { // ComputeHelper.onResize_uniformBuffer_flag_need_update
+
+                const uBuffer0 = new BABYLON.UniformBuffer(engine);
+
+                uBuffer0.addUniform("color", 4);
+                uBuffer0.addUniform("width", 1);
+                uBuffer0.addUniform("height", 1);
+                
+                ComputeHelper.clearTextureCS.setUniformBuffer("params", uBuffer0); // cs1
+
+                
+                ComputeHelper.clearTextureParams = uBuffer0;
+
+                //ComputeHelper.onResize_uniformBuffer_flag_need_update = false;
+            }
+
+            ComputeHelper.clearTextureCS.setStorageTexture("tbuf", source);
+
+            //const { width, height } = source.getSize();
+            const size = source.getSize();
+
+            ComputeHelper.clearTextureParams.updateDirectColor4("color", color);
+            ComputeHelper.clearTextureParams.updateInt("width", size.width);
+            ComputeHelper.clearTextureParams.updateInt("height", size.height);
+            ComputeHelper.clearTextureParams.update();
+
+            //if ( width != size.width || height != size.height ) {
+            //    console.log("ComputeHelper::ClearTexture() :: ( width != size.width || height != size.height )");
+            //    console.log("[screen size] { width = " + width + ", height = " + height + " }");
+            //    console.log("[render target size] { width = " + size.width + ", height = " + size.height + " }");
+            //
+            //    return;
+            //}
+
+            //const engine_temp = source.getScene().getEngine();
+
+            //const engine_temp_width = engine_temp.getRenderWidth();
+            //const engine_temp_height = engine_temp.getRenderHeight();
+
+            //if ( width != engine_temp_width || height != engine_temp_height ) {
+            //    console.log("ComputeHelper::ClearTexture() :: ( width != engine_temp.width || height != engine_temp.height )");
+            //    console.log("[screen size] { width = " + width + ", height = " + height + " }");
+            //    console.log("[engine_temp size] { width = " + engine_temp_width + ", height = " + engine_temp_height + " }");
+            //
+            //    return;
+            //}
+
+            //const engine_width = engine.getRenderWidth();
+            //const engine_height = engine.getRenderHeight();
+
+            //if ( width != engine_width || height != engine_height ) {
+            //    console.log("ComputeHelper::ClearTexture() :: ( width != engine_width || height != engine_height )");
+            //    console.log("[screen size] { width = " + width + ", height = " + height + " }");
+            //    console.log("[engine size] { width = " + engine_width + ", height = " + engine_height + " }");
+            //
+            //    return;
+            //}
+
+            ComputeHelper.Dispatch(ComputeHelper.clearTextureCS, size.width, size.height, 1);
+        }
+
+        static Dispatch(cs, numIterationsX, numIterationsY, numIterationsZ) {
+            if (!numIterationsY) { numIterationsY = 1; }
+            if (!numIterationsZ) { numIterationsZ = 1; }
+
+            if (!cs.threadGroupSizes) {
+                cs.threadGroupSizes = ComputeHelper.GetThreadGroupSizes(cs._shaderPath.computeSource);
+            }
+
+            const threadGroupSizes = cs.threadGroupSizes;
+            const numGroupsX = Math.ceil(numIterationsX / threadGroupSizes.x);
+            const numGroupsY = Math.ceil(numIterationsY / threadGroupSizes.y);
+            const numGroupsZ = Math.ceil(numIterationsZ / threadGroupSizes.z);
+            
+            cs.dispatch(numGroupsX, numGroupsY, numGroupsZ);
+        }    
+    }
+
+    window.initFunction = async function() {
+
+        var asyncEngineCreation = async function() {
+            try {
+                return createDefaultEngine();
+            } catch(e) {
+                console.log("the available createEngine function failed. Creating the default engine instead");
+                return createDefaultEngine();
+            }
+        }
+
+        engine = await asyncEngineCreation(); //window.engine = await asyncEngineCreation();
+        if (!engine) throw 'engine should not be null.';
+        startRenderLoop(engine, canvas);
+        rayTracingScene = createScene(); //window.rayTracingScene = createScene();
+    };
+
+    initFunction().then(() => {sceneToRender = rayTracingScene});
+
+    // Watch for browser/canvas resize events
+    window.addEventListener("resize", function ()
+    {
+        handleWindowResize();
+    });
+
+    function handleWindowResize()
+    {
+        windowIsBeingResized = true;
+
+        engine.resize();
+
+        let newWidth = engine.getRenderWidth();
+        let newHeight = engine.getRenderHeight();
+
+        //rayTracingRenderTarget.resize({ width: newWidth, height: newHeight });
+        //screenCopyRenderTarget.resize({ width: newWidth, height: newHeight });
+
+        //if (!raytraceEngine) {
+        //    console.log("handleWindowResize():: false == raytraceEngine");
+        //    return;            
+        //}
+
+        if (!raytraceEngine.update_screen_size(newWidth, newHeight)) {
+            console.log("handleWindowResize():: !raytraceEngine.update_screen_size()");
+            return;
+        }
+
+        //width = newWidth;
+        //height = newHeight;
+
+        //uVLen = Math.tan(camera.fov * 0.5);
+        //uULen = uVLen * (width / height);
+    }
+
+    let modelNameAndExtension = "cube.obj";
+    let containerMeshes = [];
+    let rayTracedMesh;
+    //var rayTracingScene2_Loaded = null; //
+    let total_number_of_triangles = 0;
+    let triangle_array = [];
+
+    function loadModel_ImportMesh(to_scene) {
+        // The first parameter can be used to specify which mesh to import. Here we import all meshes
+        BABYLON.SceneLoader.ImportMesh("", "models/", modelNameAndExtension, to_scene, function (newMeshes) {
+            // Set the target of the camera to the first imported mesh
+            //camera.target = newMeshes[0];
+        });
+    }
+
+    function loadModel()
+    {
+        BABYLON.SceneLoader.Load("models/", modelNameAndExtension, engine, function (scene) {
+        //BABYLON.SceneLoader.LoadAssetContainer("models/", modelNameAndExtension, rayTracingScene, function (scene) {
+            // do something with the scene
+
+            //rayTracingScene2_Loaded = scene;
+
+            // clear out the mesh object and array
+            rayTracedMesh = null;
+            containerMeshes = [];
+
+            console.log("Model file name: " + modelNameAndExtension);
+
+            console.log("number of meshes found in original obj file: " + scene.meshes.length);
+
+            for (let i=0; i<scene.meshes.length; i++) {
+                console.log("scene.meshes[" + i + "].getTotalVertices() = " + scene.meshes[i].getTotalVertices());
+                console.log("scene.meshes[" + i + "].getTotalIndices()/3 = " + scene.meshes[i].getTotalIndices()/3);
+            }
+
+            for (let i = 0; i < scene.meshes.length; i++)
+            {
+                if (scene.meshes[i].geometry)
+                {
+                    containerMeshes.push(scene.meshes[i]);
+                }
+            }
+
+            if (scene.meshes.length > 1)
+            {
+                console.log("now merging these " + scene.meshes.length + " meshes into 1 mesh...")
+                rayTracedMesh = BABYLON.Mesh.MergeMeshes(containerMeshes, true, true);
+            }
+            else // only 1 mesh was detected in original gltf/glb model file
+            {
+                rayTracedMesh = scene.meshes[0];
+            }
+
+            rayTracedMesh.isVisible = false; // don't want WebGL to render this geometry in the normal way
+
+            console.log("Triangle Face count: " + (rayTracedMesh.getTotalIndices() / 3));
+
+            // not sure if the following is the correct way to check for indices inside the gltf/glb file?
+            if (rayTracedMesh.getTotalIndices() != rayTracedMesh.getTotalVertices())
+            {
+                console.log("Indices detected, now converting to UnIndexed mesh...")
+                rayTracedMesh.convertToUnIndexedMesh();
+            }
+
+            console.log("total Vertex count: " + rayTracedMesh.getTotalVertices());
+
+            total_number_of_triangles = rayTracedMesh.getTotalVertices() / 3;
+
+            //rayTracingScene.add(scene.meshes[0]);
+            //rayTracingScene.add(containerMeshes);
+
+            Prepare_Model_For_RayTracing();
+
+            raytraceEngine._load();
+        });
+    }
+
+    function Prepare_Model_For_RayTracing() {
+        //rayTracingScene.meshes.add(containerMeshes.meshes);
+
+        const koef_offset = 32; // for pbr koef_offset 24; // 
+
+        triangle_array = new Float32Array(total_number_of_triangles * koef_offset); //new Float32Array(2048 * 2048 * 4);
+
+        let vp0 = new BABYLON.Vector3();
+        let vp1 = new BABYLON.Vector3();
+        let vp2 = new BABYLON.Vector3();
+        let vn0 = new BABYLON.Vector3();
+        let vn1 = new BABYLON.Vector3();
+        let vn2 = new BABYLON.Vector3();
+        let vt0 = new BABYLON.Vector2();
+        let vt1 = new BABYLON.Vector2();
+        let vt2 = new BABYLON.Vector2();
+
+        let vpa = new Float32Array(rayTracedMesh.getVerticesData("position"));
+	    //let vna = new Float32Array(rayTracedMesh.getVerticesData("normal"));
+
+        for (let i=0; i<total_number_of_triangles; i++) {
+            // record vertex positions
+            vp0.set(vpa[9 * i + 0], vpa[9 * i + 1], vpa[9 * i + 2]);
+            vp2.set(vpa[9 * i + 3], vpa[9 * i + 4], vpa[9 * i + 5]);
+            vp1.set(vpa[9 * i + 6], vpa[9 * i + 7], vpa[9 * i + 8]);
+
+            vp0.x *= -1; vp0.z *= -1;
+            vp1.x *= -1; vp1.z *= -1;
+            vp2.x *= -1; vp2.z *= -1;
+
+
+            // record triangle vertex data for triangleDataTexture
+            const offset = koef_offset * i;
+
+            //slot 0
+            triangle_array[offset + 0] = vp0.x; // r or x
+            triangle_array[offset + 1] = vp0.y; // g or y 
+            triangle_array[offset + 2] = vp0.z; // b or z
+            triangle_array[offset + 3] = vp1.x; // a or w
+
+            //slot 1
+            triangle_array[offset + 4] = vp1.y; // r or x
+            triangle_array[offset + 5] = vp1.z; // g or y
+            triangle_array[offset + 6] = vp2.x; // b or z
+            triangle_array[offset + 7] = vp2.y; // a or w
+
+            //slot 2
+            triangle_array[offset + 8] = vp2.z; // r or x
+            triangle_array[offset + 9] = vn0.x; // g or y
+            triangle_array[offset + 10] = vn0.y; // b or z
+            triangle_array[offset + 11] = vn0.z; // a or w
+
+            //slot 3
+            triangle_array[offset + 12] = vn1.x; // r or x
+            triangle_array[offset + 13] = vn1.y; // g or y
+            triangle_array[offset + 14] = vn1.z; // b or z
+            triangle_array[offset + 15] = vn2.x; // a or w
+
+            //slot 4
+            triangle_array[offset + 16] = vn2.y; // r or x
+            triangle_array[offset + 17] = vn2.z; // g or y
+            triangle_array[offset + 18] = vt0.x; // b or z
+            triangle_array[offset + 19] = vt0.y; // a or w
+
+            //slot 5
+            triangle_array[offset + 20] = vt1.x; // r or x
+            triangle_array[offset + 21] = vt1.y; // g or y
+            triangle_array[offset + 22] = vt2.x; // b or z
+            triangle_array[offset + 23] = vt2.y; // a or w
+
+            // the remaining slots are used for PBR material properties
+
+            // //slot 6
+            // triangle_array[offset + 24] = material.type; // r or x 
+            // triangle_array[offset + 25] = material.color.r; // g or y
+            // triangle_array[offset + 26] = material.color.g; // b or z
+            // triangle_array[offset + 27] = material.color.b; // a or w
+
+            // //slot 7
+            // triangle_array[offset + 28] = 0; // r or x
+            // triangle_array[offset + 29] = 0; // g or y
+            // triangle_array[offset + 30] = 0; // b or z
+            // triangle_array[offset + 31] = 0; // a or w
+        }
+
+        /*
+        // for test
+        triangle_array[0] = 0; // r or x
+        triangle_array[1] = 0; // g or y 
+        triangle_array[2] = 0; // b or z
+
+        triangle_array[3] = 0; // r or x
+        triangle_array[4] = 50; // g or y 
+        triangle_array[5] = 0; // b or z
+
+        triangle_array[6] = 50; // r or x
+        triangle_array[7] = 0; // g or y 
+        triangle_array[8] = 0; // b or z
+        */
+
+        //console.log("triangle_array[3] = " + triangle_array[3]);
+        //console.log("triangle_array[4] = " + triangle_array[4]);
+        //console.log("triangle_array[5] = " + triangle_array[5]);
+    }
+
+    // kickstart the loading process
+    //loadModel();
+
+  </script>
+</body>
