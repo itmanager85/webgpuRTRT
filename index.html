@@ -1,4 +1,20 @@
+<html>
+    <head><style>
+        #fps {
+            position: absolute;
+            background-color: black;
+            border: 2px solid rgb(82, 35, 211);
+            text-align: center;
+            font-size: 16px;
+            color: white;
+            top: 15px;
+            right: 10px;
+            width: 60px;
+            height: 20px;
+        }
+    </style></head>
 <body>
+    <div id="fps">0</div>
   <canvas id="renderCanvas"></canvas>
   <style>
     body, #renderCanvas {
@@ -16,6 +32,8 @@
 
 
   <script>
+    let divFps = document.getElementById("fps");
+
     // Get the canvas DOM element
     let canvas = document.getElementById('renderCanvas');
     // Load the 3D engine
@@ -133,6 +151,9 @@
         camera.angularSensibilityX = 250;
         camera.angularSensibilityY = 250;
         camera.wheelPrecision = 1.0; //0.12; //Mouse wheel speed
+
+        //console.log("camera.inertia = " + camera.inertia);
+        //camera.inertia = 0.8;
 
         uVLen = Math.tan(camera.fov * 0.5);
         uULen = uVLen * (engine.getRenderWidth() / engine.getRenderHeight());
@@ -265,6 +286,8 @@
             if (true == this._trianglesLoaded) {
                 ComputeHelper.rtrt_to_texture(this._displayTexture, this._triangleBuffer, new BABYLON.Color4(0.1, 0.7, 0.2, 0.7), ComputeHelper.onResize_uniformBuffer_flag_need_update);
             }
+
+            divFps.innerHTML = this._engine.getFps().toFixed() + " fps";
 
             ComputeHelper.onResize_uniformBuffer_flag_need_update = false;
         }
@@ -994,3 +1017,4 @@
 
   </script>
 </body>
+</html>
