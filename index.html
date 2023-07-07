@@ -309,6 +309,9 @@
 
         static rtrtTextureComputeShader = `
 
+            const EPSILON = 0.001f;
+            const UINT_MAX = 4294967295;
+
             struct Params {
                 color : vec4<f32>,
                 width : u32,
@@ -362,18 +365,12 @@
             };
 
             fn HitRecordInit( ht : ptr<function, HitRecord> ) {
-
-                const UINT_MAX = 4294967295;
-
                 (*ht).t = UINT_MAX;
                 (*ht).hit_index = -1; 
                 (*ht).color = vec3<f32>(0,0,0);
             }; 
 
             fn HitRecord_resetT( ht : ptr<function, HitRecord> ) {
-
-                const UINT_MAX = 4294967295;
-
                 (*ht).t = UINT_MAX;
                 (*ht).hit_index = -1; 
             }; 
@@ -427,9 +424,7 @@
 
             @group(0) @binding(0) var tbuf : texture_storage_2d<rgba16float, write>;
             @group(0) @binding(1) var<uniform> params : Params;
-            @group(0) @binding(2) var<storage, read> triangles : array<Triangle>; //Triangles; //array<f32>; //FloatArray; //Triangles; //
-
-            //@group(0) @binding(2) var<storage, read> TrailMap : FloatArray;
+            @group(0) @binding(2) var<storage, read> triangles : array<Triangle>; 
 
             @compute @workgroup_size(8, 8, 1)
             fn main(
@@ -462,7 +457,7 @@
                 var hit_r : HitRecord;
 	            HitRecordInit ( &hit_r );
 
-                const number_of_triangles = 156; //1; //
+                let number_of_triangles : u32 = arrayLength(&triangles); //156; //1; //
 
                 var continue_path : bool = true;
 
@@ -481,8 +476,6 @@
                     sphere_hit = true;
                 }
 
-                const EPSILON = 0.001;
-
                 let shadow_coef : f32 = 1.0f;
 
                 // {xf, yf}
@@ -494,7 +487,7 @@
                 var ray_depth : u32 = 0;
                 for (var ray_depth_count : u32 = 0; ray_depth_count < params.rayDepth; ray_depth_count++) {
 
-                    for(var i = 0; i < number_of_triangles; i++) {
+                    for(var i : u32 = 0; i < number_of_triangles; i++) {
 
                         let v0 : vec3<f32> = triangles[i].v0.xyz;
                         let v1 : vec3<f32> = vec3<f32>(triangles[i].v0.w, triangles[i].v1.x, triangles[i].v1.y); 
@@ -512,7 +505,7 @@
                         if(t < hit_r.t && t > EPSILON)
                         {
                             hit_r.t = t; 
-                            hit_r.hit_index = i;
+                            hit_r.hit_index = i32(i);
                         }
                     }
 
